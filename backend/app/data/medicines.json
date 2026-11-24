@@ -1,0 +1,98 @@
+[
+  {
+    "id": "amoxicillin-500",
+    "name": "Amoxicillin",
+    "generic_name": "Amoxicillin",
+    "strength": "500 mg",
+    "form": "capsule",
+    "aliases": ["amoxil", "amoxicillin"]
+  },
+  {
+    "id": "paracetamol-650",
+    "name": "Paracetamol",
+    "generic_name": "Paracetamol",
+    "strength": "650 mg",
+    "form": "tablet",
+    "aliases": ["acetaminophen", "calpol", "paracetamol"]
+  },
+  {
+    "id": "cetirizine-10",
+    "name": "Cetirizine",
+    "generic_name": "Cetirizine",
+    "strength": "10 mg",
+    "form": "tablet",
+    "aliases": ["cetirizine", "zyrtec"]
+  },
+  {
+    "id": "ibuprofen-400",
+    "name": "Ibuprofen",
+    "generic_name": "Ibuprofen",
+    "strength": "400 mg",
+    "form": "tablet",
+    "aliases": ["advil", "brufen", "ibuprofen"]
+  },
+  {
+    "id": "azithromycin-500",
+    "name": "Azithromycin",
+    "generic_name": "Azithromycin",
+    "strength": "500 mg",
+    "form": "tablet",
+    "aliases": ["azithro", "azithromycin", "zithromax"]
+  },
+  {
+    "id": "omeprazole-20",
+    "name": "Omeprazole",
+    "generic_name": "Omeprazole",
+    "strength": "20 mg",
+    "form": "capsule",
+    "aliases": ["omeprazole", "prilosec"]
+  },
+  {
+    "id": "pantoprazole-40",
+    "name": "Pantoprazole",
+    "generic_name": "Pantoprazole",
+    "strength": "40 mg",
+    "form": "tablet",
+    "aliases": ["pantoprazole", "protonix"]
+  },
+  {
+    "id": "metformin-500",
+    "name": "Metformin",
+    "generic_name": "Metformin",
+    "strength": "500 mg",
+    "form": "tablet",
+    "aliases": ["glucophage", "metformin"]
+  },
+  {
+    "id": "atorvastatin-10",
+    "name": "Atorvastatin",
+    "generic_name": "Atorvastatin",
+    "strength": "10 mg",
+    "form": "tablet",
+    "aliases": ["atorvastatin", "lipitor"]
+  },
+  {
+    "id": "amlodipine-5",
+    "name": "Amlodipine",
+    "generic_name": "Amlodipine",
+    "strength": "5 mg",
+    "form": "tablet",
+    "aliases": ["amlodipine", "norvasc"]
+  },
+  {
+    "id": "salbutamol-100",
+    "name": "Salbutamol",
+    "generic_name": "Salbutamol",
+    "strength": "100 mcg",
+    "form": "inhaler",
+    "aliases": ["albuterol", "salbutamol", "ventolin"]
+  },
+  {
+    "id": "loratadine-10",
+    "name": "Loratadine",
+    "generic_name": "Loratadine",
+    "strength": "10 mg",
+    "form": "tablet",
+    "aliases": ["claritin", "loratadine"]
+  }
+]
