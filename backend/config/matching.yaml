@@ -1,0 +1,25 @@
+# Tunable medicine-matching parameters. The benchmark/tuning script sweeps
+# these values against labelled synthetic data; no accuracy is claimed here.
+matching:
+  # Added to the fuzzy ratio when the extracted strength matches the DB entry.
+  strength_bonus: 0.05
+  # Alternatives below this similarity are not shown to the user.
+  alternative_threshold: 0.35
+  max_alternatives: 3
+  # Confidence curve applied to the final match score.
+  base_confidence: 0.45
+  score_scale: 0.55
+  confidence_cap: 0.99
+  # main.py blends matcher confidence with entity extraction confidence.
+  entity_confidence_weight: 0.3
+  match_confidence_weight: 0.7
+  # Cached fuzzy comparisons (bounded to avoid unbounded memory growth).
+  score_cache_size: 8192
+  # Optional phonetic fallback for OCR spelling errors.
+  phonetic_enabled: true
+  # Weight of the phonetic key when combining with the fuzzy ratio (0..1).
+  phonetic_weight: 0.2
+  # Added when both strength and form agree with the DB entry.
+  form_bonus: 0.02
+  # Global rejection threshold; per-entry min_score in medicines.json can raise it.
+  min_score: 0.0

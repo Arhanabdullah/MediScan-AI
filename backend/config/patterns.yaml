@@ -1,0 +1,40 @@
+# Entity extraction patterns. Single-quoted scalars keep backslashes literal.
+entity_labels:
+  medicine_names: medicine_name
+  strengths: strength
+  frequencies: frequency
+  durations: duration
+  forms: form
+
+skip_prefixes:
+  - "take "
+  - patient
+  - date
+  - rx
+  - ref
+  - sig
+  - q.
+  - diagnosis
+  - advice
+  - contact
+
+regex:
+  strength: '\b\d+(?:\.\d+)?\s*(?:mg|mcg|µg|g|ml|iu|units?)\b'
+  frequency: '\b(?:once daily|twice daily|three times daily|four times daily|every\s+\d+\s*(?:hours?|hrs?)|at bedtime|as needed|if needed|bd|tds|qid|od|sos)\b'
+  duration: '\b(?:for\s+\d+\s+days?|\d+[- ]day(?:\s+course)?)\b'
+  form: '\b(?:tablet|capsule|syrup|suspension|injection|inhaler|drops|cream|ointment|patch)\b'
+  list_bullet: '^\s*(?:\d+[.)]?|[-•*])\s*'
+  label_prefix: '^(?:name|medicine|drug|tab|cap)\s*[:.\-]?\s*'
+
+# Extraction heuristics
+max_medicine_words: 5
+max_medicine_line_length: 90
+
+# Per-entity confidence hints (used for candidate ranking / confidence score)
+entity_confidence:
+  known_name: 0.95
+  candidate: 0.68
+  strength: 0.92
+  frequency: 0.88
+  duration: 0.86
+  form: 0.9

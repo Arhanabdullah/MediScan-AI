@@ -2,17 +2,18 @@
 
 ## Current system
 
-MediScan-AI currently uses a deterministic, rule-based baseline instead of a trained machine-learning model. This is intentional: the project brief calls for a reliable baseline before ML/DL experiments.
+MediScan-AI uses a deterministic, configurable baseline instead of a trained machine-learning model. This is intentional: the project brief calls for a reliable, measurable pipeline before ML/DL experiments.
 
 ```text
 Prescription image
-  -> OpenCV preprocessing
-  -> Tesseract OCR (or demo fallback)
+  -> OpenCV preprocessing (threshold / enhanced)
+  -> OCR registry (Tesseract / EasyOCR / PaddleOCR / demo)
   -> raw text
-  -> regex/rule-based entity extraction
-  -> RapidFuzz medicine matching
-  -> heuristic confidence score
+  -> pluggable entity extraction (regex by default; spaCy/transformer optional)
+  -> repository-backed fuzzy medicine matching
+  -> versioned weighted confidence model with explainable breakdown
   -> user verification
+  -> optional private persistence for authenticated users
 ```
 
 No clinical accuracy claims are made. Any reported metric must come from an actual evaluation run on a suitable dataset.
@@ -25,46 +26,52 @@ Implemented in `backend/app/services/preprocess.py`:
 - grayscale conversion
 - denoising
 - CLAHE contrast enhancement
-- adaptive thresholding
-- morphological closing
+- adaptive thresholding and morphological closing (`threshold` mode)
+- grayscale CLAHE output for deep-learning OCR engines (`enhanced` mode)
+- structured stage logging with correlation IDs
 
 Skew correction and text-region cropping are planned but not implemented.
 
 ## OCR
 
-Implemented in `backend/app/services/ocr.py`:
+Implemented in `backend/app/services/ocr/` with a registry and engine implementations:
 
-- Tesseract via `pytesseract` when available
-- `OCR_BACKEND=auto`: use Tesseract, fall back to synthetic demo text if unavailable
-- `OCR_BACKEND=tesseract`: require Tesseract
-- `OCR_BACKEND=demo`: always use synthetic demo text
+- `tesseract`: `pytesseract` when available
+- `easyocr` / `paddleocr`: optional heavy engines imported lazily when selected
+- `demo`: synthetic fixture fallback so the app runs without any OCR engine installed
+- `OCR_BACKEND=auto`: try engines in `backend/config/ocr.yaml` priority order, then fall back to demo
 
-EasyOCR and PaddleOCR are planned comparison candidates, not active dependencies.
+Engine priority, options and fallback live in YAML configuration rather than code.
 
 ## Entity extraction
 
-Implemented in `backend/app/services/nlp.py`:
+Implemented in `backend/app/services/nlp/` with a pluggable pipeline:
 
-- medicine names from known vocabulary or line-level heuristics
+- config-driven regex extraction is the default
 - strengths such as `500 mg`
 - frequencies such as `twice daily`, `every 6 hours`, `at bedtime`
 - durations such as `for 7 days`
 - forms such as `tablet`, `capsule`, `inhaler`
+- post-processing deduplicates values, expands abbreviations and normalizes units
+- optional spaCy and transformer extractors are lazy-loaded and never abort a scan if unavailable
 
-This stage is replaceable with spaCy NER or a transformer-based extractor without changing the API response shape.
+Patterns and extractor order live in `backend/config/patterns.yaml` and `backend/config/nlp.yaml`.
 
 ## Medicine matching
 
-Implemented in `backend/app/services/medicines.py`:
+Implemented in `backend/app/services/medicines/`:
 
+- repository abstraction with JSON (default) and SQLite backends
 - normalization: lowercase, remove punctuation, strip list markers
-- RapidFuzz ratio scoring against names, generic names, and aliases
-- strength agreement bonus
+- RapidFuzz ratio scoring against names, generic names and aliases
+- optional phonetic fallback with built-in Soundex or `jellyfish` Metaphone
+- strength and form agreement bonuses
+- per-entry and global score thresholds from `backend/config/matching.yaml`
 - alternative suggestions for user review
 
 ## Confidence scoring
 
-Implemented in `backend/app/services/confidence.py`. It blends:
+Implemented in `backend/app/services/confidence/` as versioned models behind a registry. The baseline blends:
 
 - OCR engine reliability
 - text length
@@ -72,16 +79,17 @@ Implemented in `backend/app/services/confidence.py`. It blends:
 - average medicine match confidence
 - penalties for processing warnings
 
-This is a heuristic confidence signal, not a calibrated probability.
+`calculate_breakdown()` returns per-component contributions, the selected model and any fallback reason. This is a heuristic signal, not a calibrated probability. Weights and A/B settings live in `backend/config/confidence.yaml`.
 
 ## Evaluation plan
 
-The evaluation harness lives in `backend/scripts/evaluate.py` and uses synthetic samples from `backend/data/eval_samples.json`.
+Implemented harnesses:
 
-Implemented metrics:
+- `backend/scripts/evaluate.py`: CER/WER and medicine precision/recall/F1 on synthetic text samples
+- `backend/scripts/benchmark_ocr.py`: CER/WER per available OCR engine on synthetic images
+- `backend/scripts/tune_pipeline.py`: matching threshold sweep and confidence calibration
 
-- OCR: Character Error Rate (CER), Word Error Rate (WER)
-- Medicine recognition: precision, recall, F1
+`GET /api/evaluation` exposes the same synthetic baseline as `scripts/evaluate.py`.
 
 Field-level end-to-end exact match is planned once labeled end-to-end samples exist.
 
@@ -112,9 +120,11 @@ These values describe spelling-corrupted synthetic text, not real prescriptions 
 
 ## ML/DL roadmap
 
-Planned experiments, in order:
+Service optimization Phases 1–5 are implemented: protocols, structured logging, multi-backend OCR, repository-backed medicine matching, pluggable NLP, confidence model registry and telemetry. See `plan/services-optimization.md` and the phase status reports.
 
-1. Compare Tesseract, EasyOCR, and PaddleOCR on the same printed-prescription samples.
+Planned modeling experiments, in order:
+
+1. Compare Tesseract, EasyOCR and PaddleOCR on the same printed-prescription samples with `benchmark_ocr.py`.
 2. Measure preprocessing impact with before/after CER and WER.
 3. Compare fuzzy matching with a classifier trained on OCR spelling variants.
 4. Evaluate a small NER model for medicine/strength/frequency extraction.

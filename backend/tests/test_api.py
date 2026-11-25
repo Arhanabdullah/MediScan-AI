@@ -5,9 +5,13 @@ import uuid
 from pathlib import Path
 
 os.environ["OCR_BACKEND"] = "demo"
-test_db_path = Path(tempfile.gettempdir()) / "mediscan-test.db"
-test_db_path.unlink(missing_ok=True)
-os.environ["DATABASE_URL"] = f"sqlite:///{test_db_path}"
+
+_test_db_path = Path(tempfile.gettempdir()) / "mediscan-test.db"
+_test_db_path.unlink(missing_ok=True)
+os.environ["DATABASE_URL"] = f"sqlite:///{_test_db_path}"
+
+_test_upload_dir = Path(tempfile.gettempdir()) / "mediscan-test-uploads"
+os.environ["UPLOAD_DIR"] = str(_test_upload_dir)
 
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -40,6 +44,16 @@ def test_health() -> None:
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
     assert response.json()["medicine_count"] > 0
+
+
+def test_correlation_id_is_echoed() -> None:
+    response = client.post(
+        "/api/scan",
+        headers={"X-Correlation-ID": "abc123"},
+        files={"file": ("prescription.png", _image_bytes(), "image/png")},
+    )
+    assert response.status_code == 200
+    assert response.headers["X-Correlation-ID"] == "abc123"
 
 
 def test_model_info_and_evaluation() -> None:
@@ -89,8 +103,7 @@ def test_anonymous_scan_and_verify() -> None:
 
 def test_authenticated_scan_history_and_delete() -> None:
     headers = _auth_headers()
-    me = client.get("/api/me", headers=headers)
-    assert me.status_code == 200
+    assert client.get("/api/me", headers=headers).status_code == 200
 
     scan_response = client.post(
         "/api/scan",

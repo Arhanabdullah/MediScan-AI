@@ -1,0 +1,27 @@
+# OCR engine registry. Engines are only instantiated when available;
+# EasyOCR and PaddleOCR are optional and imported lazily.
+engines:
+  tesseract:
+    enabled: true
+    priority: 1
+    config: "--psm 6"
+    preferred_preprocess: threshold
+  easyocr:
+    enabled: true
+    priority: 2
+    languages: ["en"]
+    gpu: false
+    preferred_preprocess: enhanced
+  paddleocr:
+    enabled: true
+    priority: 3
+    use_gpu: false
+    language: "en"
+    preferred_preprocess: enhanced
+  demo:
+    enabled: true
+    priority: 99
+    preferred_preprocess: threshold
+
+# Used when OCR_BACKEND=auto or when every preferred engine is unavailable.
+fallback: demo

@@ -1,0 +1,41 @@
+{
+  "note": "Synthetic confidence targets for calibration experiments, not clinical judgements.",
+  "samples": [
+    {
+      "name": "clear_tesseract_scan",
+      "raw_text": "Rx Paracetamol 650 mg tablet twice daily for 5 days Patient Demo Date 2026-01-15",
+      "entity_keys": ["medicine_names", "strengths", "frequencies", "durations", "forms"],
+      "medicine_confidences": [0.92],
+      "ocr_engine": "tesseract",
+      "warnings": [],
+      "target": 0.88
+    },
+    {
+      "name": "demo_fallback_scan",
+      "raw_text": "Rx Paracetamol 650 mg tablet twice daily for 5 days Patient Demo Date 2026-01-15 Extra synthetic text to reach roughly three hundred characters for the text length component of the confidence score and some more text",
+      "entity_keys": ["medicine_names", "strengths", "frequencies"],
+      "medicine_confidences": [0.7],
+      "ocr_engine": "demo-fallback",
+      "warnings": ["Demo OCR mode is active; text is synthetic."],
+      "target": 0.6
+    },
+    {
+      "name": "failed_ocr_scan",
+      "raw_text": "Rx 1 tablet daily",
+      "entity_keys": ["forms", "frequencies"],
+      "medicine_confidences": [0.5],
+      "ocr_engine": "tesseract-error",
+      "warnings": ["Tesseract failed: Timeout.", "OCR returned no readable text."],
+      "target": 0.24
+    },
+    {
+      "name": "empty_scan",
+      "raw_text": "",
+      "entity_keys": [],
+      "medicine_confidences": [],
+      "ocr_engine": "tesseract-unavailable",
+      "warnings": ["Tesseract is not installed; OCR is unavailable."],
+      "target": 0.0
+    }
+  ]
+}

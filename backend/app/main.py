@@ -1,15 +1,18 @@
+from __future__ import annotations
+
 import json
-import os
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, get_optional_user
-from app.config import BASE_DIR, settings
+from app.config import BACKEND_DIR, settings
 from app.db import Base, engine, get_db
 from app.models import DetectedMedicine, Prescription, User
 from app.schemas import (
@@ -29,29 +32,25 @@ from app.schemas import (
     VerificationRequest,
     VerificationResponse,
 )
-from app.services.confidence import calculate_confidence
+from app.services.confidence import calculate_breakdown, get_registry
 from app.services.evaluation import evaluate_samples
-from app.services.medicines import MEDICINES, match_medicine
+from app.services.logging import bind_correlation_id, get_logger, log_stage
+from app.services.medicines import get_repository, match_entities
 from app.services.nlp import extract_entities
-from app.services.ocr import extract_text
+from app.services.ocr import extract_text, preferred_preprocess_mode
 from app.services.preprocess import preprocess_image
+from app.services.protocols import ConfidenceContext
 from app.services.security import create_access_token, hash_password, verify_password
+from app.services.telemetry import METRICS
 
 app = FastAPI(title=settings.project_name, version="0.2.0")
 Base.metadata.create_all(bind=engine)
 
-origins = [
-    origin.strip()
-    for origin in os.getenv(
-        "CORS_ORIGINS",
-        "http://127.0.0.1:5173,http://localhost:5173,http://localhost:3000,http://127.0.0.1:3000",
-    ).split(",")
-    if origin.strip()
-]
+pipeline_logger = get_logger("pipeline")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -135,13 +134,36 @@ async def health() -> HealthResponse:
         status="ok",
         service=settings.project_name,
         ocr_backend=settings.ocr_backend,
-        medicine_count=len(MEDICINES),
+        medicine_count=get_repository().count(),
     )
 
 
 @app.get("/health", response_model=HealthResponse, include_in_schema=False)
 async def root_health() -> HealthResponse:
     return await health()
+
+
+@app.get("/api/metrics", include_in_schema=False)
+async def metrics(format: str = "prometheus") -> Response:
+    """In-process pipeline metrics. Labels contain no text, filenames or PHI."""
+    if format == "json":
+        return JSONResponse(METRICS.snapshot())
+    return Response(
+        METRICS.render_prometheus(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
+
+
+@app.get("/api/confidence/models", include_in_schema=False)
+async def confidence_models() -> dict:
+    """Registered confidence models and A/B status (no patient data)."""
+    registry = get_registry()
+    return {
+        "default": registry.default_name,
+        "fallback": registry.fallback_name,
+        "models": registry.names(),
+        "ab_enabled": bool(registry.ab.get("enabled")),
+    }
 
 
 @app.post("/api/auth/register", response_model=UserOut)
@@ -179,11 +201,11 @@ async def model_info() -> ModelInfoResponse:
     return ModelInfoResponse(
         name="MediScan-AI Baseline",
         version="0.2.0",
-        approach="rule-based pipeline with fuzzy matching",
+        approach="modular rule-based pipeline with configurable extractors and fuzzy matching",
         ocr_backend=settings.ocr_backend,
-        extraction="regex and vocabulary-based entity extraction",
-        matching="RapidFuzz ratio with alias and strength handling",
-        confidence="heuristic blend of OCR, text, entity, and match signals",
+        extraction="pluggable regex/spaCy/transformer entity extraction",
+        matching="repository-backed RapidFuzz with phonetic and strength/form scoring",
+        confidence="versioned weighted model registry with an explainable breakdown",
         trained_model=False,
         note="No trained ML/DL model is active. See MODEL.md for the experiment roadmap.",
     )
@@ -191,7 +213,7 @@ async def model_info() -> ModelInfoResponse:
 
 @app.get("/api/evaluation", response_model=EvaluationResponse)
 async def evaluation() -> EvaluationResponse:
-    sample_path = BASE_DIR.parent / "data" / "eval_samples.json"
+    sample_path = BACKEND_DIR / "data" / "eval_samples.json"
     with sample_path.open(encoding="utf-8") as file:
         samples = json.load(file)
     return EvaluationResponse(**evaluate_samples(samples))
@@ -201,43 +223,58 @@ async def evaluation() -> EvaluationResponse:
 @app.post("/api/prescription/analyze", response_model=ScanResponse, include_in_schema=False)
 @app.post("/api/upload", response_model=ScanResponse, include_in_schema=False)
 async def scan(
+    request: Request,
+    response: Response,
     file: UploadFile = File(...),
     current_user: User | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ) -> ScanResponse:
+    response.headers["X-Correlation-ID"] = bind_correlation_id(request.headers.get("X-Correlation-ID"))
+    started = time.perf_counter()
     data = await _read_upload(file)
 
+    mode = preferred_preprocess_mode(settings.ocr_backend)
     try:
-        processed, size, warnings = preprocess_image(data)
+        processed, size, warnings = preprocess_image(data, mode=mode)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
-    raw_text, ocr_engine, ocr_warnings = extract_text(processed)
+    ocr_result = extract_text(processed, settings.ocr_backend)
+    raw_text, ocr_engine, ocr_warnings = ocr_result
     warnings.extend(ocr_warnings)
     entities = extract_entities(raw_text)
-    strength_values = [entity["value"] for entity in entities["strengths"]]
     medicines: list[MedicineMatch] = []
 
-    for index, entity in enumerate(entities["medicine_names"]):
-        strength = None
-        if strength_values:
-            strength = strength_values[index] if index < len(strength_values) else strength_values[0]
-        match = match_medicine(entity["value"], strength)
-        match["confidence"] = round(
-            0.7 * match["confidence"] + 0.3 * entity["confidence"],
-            3,
+    with log_stage("medicine_matching", output_summary=f"{len(entities['medicine_names'])} candidates"):
+        for match in match_entities(entities):
+            medicines.append(MedicineMatch(**match))
+
+    with log_stage("confidence"):
+        breakdown = calculate_breakdown(
+            ConfidenceContext(
+                raw_text=raw_text,
+                entities=entities,
+                medicines=[medicine.model_dump() for medicine in medicines],
+                ocr_engine=ocr_engine,
+                warnings=warnings,
+            )
         )
-        medicines.append(MedicineMatch(**match))
+        overall_confidence = breakdown.overall
+        pipeline_logger.info(
+            "confidence_breakdown",
+            extra={
+                "output_summary": str(
+                    {
+                        "components": breakdown.components,
+                        "model": breakdown.metadata.get("model"),
+                        "strategy": breakdown.metadata.get("strategy"),
+                        "fallback_used": breakdown.metadata.get("fallback_used", False),
+                    }
+                )
+            },
+        )
 
-    overall_confidence = calculate_confidence(
-        raw_text,
-        entities,
-        [medicine.model_dump() for medicine in medicines],
-        ocr_engine,
-        warnings,
-    )
-
-    response = ScanResponse(
+    scan_result = ScanResponse(
         scan_id=str(uuid.uuid4()),
         filename=file.filename or "prescription",
         image_size=ImageSize(**size),
@@ -249,27 +286,27 @@ async def scan(
         warnings=warnings,
         disclaimer=DISCLAIMER,
     )
-    SCANS[response.scan_id] = response.model_dump()
+    SCANS[scan_result.scan_id] = scan_result.model_dump()
 
     if current_user:
-        image_path = _save_image(current_user.id, response.scan_id, response.filename, data)
+        image_path = _save_image(current_user.id, scan_result.scan_id, scan_result.filename, data)
         prescription = Prescription(
-            id=response.scan_id,
+            id=scan_result.scan_id,
             user_id=current_user.id,
-            filename=response.filename,
+            filename=scan_result.filename,
             image_path=str(image_path),
-            raw_text=response.raw_text,
-            ocr_engine=response.ocr_engine,
-            overall_confidence=response.overall_confidence,
-            warnings=response.warnings,
-            response_json=response.model_dump(),
+            raw_text=scan_result.raw_text,
+            ocr_engine=scan_result.ocr_engine,
+            overall_confidence=scan_result.overall_confidence,
+            warnings=scan_result.warnings,
+            response_json=scan_result.model_dump(),
         )
         db.add(prescription)
         db.flush()
         for medicine in medicines:
             db.add(
                 DetectedMedicine(
-                    prescription_id=response.scan_id,
+                    prescription_id=scan_result.scan_id,
                     text=medicine.text,
                     matched_name=medicine.matched_name,
                     generic_name=medicine.generic_name,
@@ -281,7 +318,10 @@ async def scan(
             )
         db.commit()
 
-    return response
+    METRICS.inc("scans_total", engine=ocr_engine, has_warnings=bool(warnings))
+    METRICS.observe("scan_duration_ms", (time.perf_counter() - started) * 1000, engine=ocr_engine)
+    METRICS.observe("scan_confidence", overall_confidence, engine=ocr_engine)
+    return scan_result
 
 
 @app.get("/api/scan/{scan_id}", response_model=ScanResponse)
@@ -391,14 +431,18 @@ async def verify(
     db: Session = Depends(get_db),
 ) -> VerificationResponse:
     prescription = None
+    scan_result = None
+
     if current_user:
         prescription = (
             db.query(Prescription)
             .filter(Prescription.id == payload.scan_id, Prescription.user_id == current_user.id)
             .first()
         )
-        scan_result = _scan_from_db(prescription) if prescription else None
-    else:
+        if prescription:
+            scan_result = _scan_from_db(prescription)
+
+    if scan_result is None:
         scan_result = SCANS.get(payload.scan_id)
 
     if not scan_result:
@@ -433,6 +477,8 @@ async def verify(
                 medicine.frequency = update.frequency
                 medicine.confirmed = update.confirmed
                 medicine.confidence = 1.0 if update.confirmed else medicine.confidence
+        if payload.raw_text is not None:
+            prescription.raw_text = payload.raw_text
         prescription.verified = all(item["confirmed"] for item in final_medicines)
         db.commit()
 
@@ -442,7 +488,9 @@ async def verify(
         "filename": scan_result["filename"],
         "raw_text": payload.raw_text if payload.raw_text is not None else scan_result["raw_text"],
         "medicines": final_medicines,
-        "overall_confidence": 1.0 if all(item["confirmed"] for item in final_medicines) else scan_result["overall_confidence"],
+        "overall_confidence": (
+            1.0 if all(item["confirmed"] for item in final_medicines) else scan_result["overall_confidence"]
+        ),
         "disclaimer": DISCLAIMER,
     }
     VERIFICATIONS[payload.scan_id] = final_result

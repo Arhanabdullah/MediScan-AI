@@ -1,0 +1,63 @@
+# Pluggable entity-extraction pipeline.
+# Regex patterns and labels live in patterns.yaml (the plan's nlp_patterns.yaml);
+# this file controls extractor order, custom entity mapping and post-processing.
+nlp:
+  # Evaluated in order. Optional heavy extractors are skipped when unavailable.
+  # Default is regex-only so existing behaviour and tests stay deterministic.
+  extractors:
+    - regex
+    # - spacy
+    # - transformer
+
+  # fallback: first extractor producing entities wins.
+  # merge: run every available extractor and combine their entities.
+  strategy: fallback
+
+  # Which configured regex feeds which entity key. Append entries here plus a
+  # `regex` entry and `entity_labels` entry in patterns.yaml for custom types.
+  entity_keys:
+    strength: strengths
+    frequency: frequencies
+    duration: durations
+    form: forms
+
+  postprocess:
+    deduplicate: true
+    normalize_strength: true
+    normalize_frequency: true
+    normalize_form: true
+    # Enabling this filters out unknown/typo medicine names - it raises
+    # precision but lowers recall on misspelled OCR, so it is off by default.
+    validate_medicine_names: false
+    form_aliases:
+      tablets: tablet
+      capsules: capsule
+      syrups: syrup
+      suspensions: suspension
+      injections: injection
+      inhalers: inhaler
+      patches: patch
+    frequency_aliases:
+      bd: twice daily
+      tds: three times daily
+      qid: four times daily
+      od: once daily
+      sos: if needed
+
+  spacy:
+    model: en_core_web_sm
+    label_map:
+      DRUG: medicine_names
+      STRENGTH: strengths
+      FREQUENCY: frequencies
+      DURATION: durations
+      FORM: forms
+
+  transformer:
+    # Set an actual token-classification model to enable this extractor.
+    model: ""
+    label_map:
+      B-DRUG: medicine_names
+      I-DRUG: medicine_names
+      B-STRENGTH: strengths
+      I-STRENGTH: strengths

@@ -1,0 +1,12 @@
+Rx
+Patient: Demo Patient
+Date: 2026-01-15
+
+1. Amoxicillin 500 mg capsule
+Take 1 capsule three times daily for 7 days
+
+2. Paracetamol 650 mg tablet
+Take 1 tablet every 6 hours if needed
+
+3. Cetirizine 10 mg tablet
+Take 1 tablet once daily at bedtime
