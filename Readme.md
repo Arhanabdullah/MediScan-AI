@@ -10,22 +10,6 @@ The goal is to build a system that can take a prescription image as input, proce
 
 ---
 
-## ✅ Implementation status
-
-This repository currently implements Levels 1–3 and 5–10 of the project plan, plus a Level 4 evaluation harness:
-
-- FastAPI backend with scan, verification, health, auth, history, result detail, delete, model info, and evaluation endpoints.
-- React frontend with upload/camera input, preview, editable results, confidence display, authentication, and private history.
-- SQLAlchemy persistence with SQLite by default and PostgreSQL-compatible `DATABASE_URL`.
-- Private per-user image storage, bcrypt password hashing, and JWT access tokens.
-- Evaluation harness for CER/WER and medicine precision/recall/F1 on synthetic samples.
-- Modular service architecture with configurable OCR engines, repository-backed medicine catalogue, pluggable NLP extractors, versioned confidence models, telemetry and metrics (`plan/services-optimization.md`).
-- Docker Compose, Dockerfiles, nginx proxy, and GitHub Actions CI.
-
-No trained ML/DL model is active. The baseline approach, measured synthetic results, and experiment roadmap are documented in `MODEL.md`; agent progress is tracked in `CLAUDE.md`.
-
----
-
 ## 👥 Team Members
 
 | # | Team Member |
