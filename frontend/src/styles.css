@@ -702,6 +702,150 @@ button:disabled {
   font-size: 0.74rem;
 }
 
+.auth-panel {
+  display: grid;
+  grid-template-columns: 1fr minmax(320px, 1.4fr) auto;
+  gap: 18px;
+  align-items: end;
+  margin-top: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  background: rgba(14, 31, 52, 0.7);
+}
+
+.auth-panel__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.auth-panel__intro strong {
+  font-size: 0.88rem;
+}
+
+.auth-panel__intro span,
+.auth-panel__hint,
+.auth-panel__label {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.auth-panel__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.auth-panel__fields .field {
+  min-width: 150px;
+}
+
+.auth-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-panel__error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.76rem;
+}
+
+.auth-panel--signed-in {
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+}
+
+.auth-panel__label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.history-panel {
+  margin-top: 22px;
+}
+
+.history-panel h2 {
+  font-size: 1.05rem;
+}
+
+.history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: rgba(4, 15, 28, 0.55);
+}
+
+.history-item__main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.history-item__main strong {
+  overflow: hidden;
+  font-size: 0.84rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item__main span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.history-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.history-item__tag {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.history-item__actions {
+  display: flex;
+  gap: 12px;
+}
+
+.text-button--danger {
+  color: var(--danger);
+}
+
+@media (max-width: 900px) {
+  .auth-panel,
+  .auth-panel--signed-in {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .history-item {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 900px) {
   .hero {
     align-items: flex-start;

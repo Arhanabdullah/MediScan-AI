@@ -1,0 +1,27 @@
+[
+  {
+    "ocr_text": "Paracetmol 500 mg twice daily after food",
+    "expected_text": "Paracetamol 500 mg twice daily after food",
+    "expected_medicines": ["Paracetamol"]
+  },
+  {
+    "ocr_text": "Amaxicillin 500 mg capsule three times daily for 7 days",
+    "expected_text": "Amoxicillin 500 mg capsule three times daily for 7 days",
+    "expected_medicines": ["Amoxicillin"]
+  },
+  {
+    "ocr_text": "Cetirizine 10 mg tablet once daily at bedtime",
+    "expected_text": "Cetirizine 10 mg tablet once daily at bedtime",
+    "expected_medicines": ["Cetirizine"]
+  },
+  {
+    "ocr_text": "Metformin 500 mg tablet twice daily after meals",
+    "expected_text": "Metformin 500 mg tablet twice daily after meals",
+    "expected_medicines": ["Metformin"]
+  },
+  {
+    "ocr_text": "Omeprazol 20 mg capsule once daily before breakfast",
+    "expected_text": "Omeprazole 20 mg capsule once daily before breakfast",
+    "expected_medicines": ["Omeprazole"]
+  }
+]

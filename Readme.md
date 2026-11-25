@@ -10,6 +10,21 @@ The goal is to build a system that can take a prescription image as input, proce
 
 ---
 
+## ✅ Implementation status
+
+This repository currently implements Levels 1–3 and 5–10 of the project plan, plus a Level 4 evaluation harness:
+
+- FastAPI backend with scan, verification, health, auth, history, result detail, delete, model info, and evaluation endpoints.
+- React frontend with upload/camera input, preview, editable results, confidence display, authentication, and private history.
+- SQLAlchemy persistence with SQLite by default and PostgreSQL-compatible `DATABASE_URL`.
+- Private per-user image storage, bcrypt password hashing, and JWT access tokens.
+- Evaluation harness for CER/WER and medicine precision/recall/F1 on synthetic samples.
+- Docker Compose, Dockerfiles, nginx proxy, and GitHub Actions CI.
+
+No trained ML/DL model is active. The baseline approach, measured synthetic results, and experiment roadmap are documented in `MODEL.md`; agent progress is tracked in `CLAUDE.md`.
+
+---
+
 ## 👥 Team Members
 
 | # | Team Member |
@@ -500,19 +515,26 @@ The complete system will be evaluated for:
 
 ---
 
-## 🔌 Planned API
+## 🔌 API
 
-The backend is planned around REST endpoints such as:
+The implemented REST endpoints are:
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| `GET` | `/api/health` | Check backend health |
-| `POST` | `/api/prescription/analyze` | Analyze a prescription |
-| `POST` | `/api/upload` | Upload a prescription |
-| `GET` | `/api/history` | Retrieve prescription history |
-| `GET` | `/api/result/{id}` | Retrieve a specific result |
-| `DELETE` | `/api/result/{id}` | Delete a result |
-| `GET` | `/api/model-info` | Retrieve model information |
+| `GET` | `/api/health` | Check backend health (`/health` alias also available) |
+| `POST` | `/api/auth/register` | Create a user account |
+| `POST` | `/api/auth/login` | Obtain a JWT access token |
+| `GET` | `/api/me` | Get the authenticated user |
+| `POST` | `/api/scan` | Analyze an uploaded prescription image |
+| `GET` | `/api/scan/{id}` | Retrieve a scan result by id |
+| `POST` | `/api/verify` | Save user-confirmed medicines |
+| `GET` | `/api/history` | List the authenticated user's saved scans |
+| `GET` | `/api/result/{id}` | Retrieve a saved result |
+| `DELETE` | `/api/result/{id}` | Delete a saved result and its private image |
+| `GET` | `/api/model-info` | Describe the active pipeline |
+| `GET` | `/api/evaluation` | Run the synthetic baseline evaluation |
+
+`/api/prescription/analyze` and `/api/upload` remain as aliases for `/api/scan`.
 
 Example response:
 
@@ -533,9 +555,9 @@ The exact API contract may evolve during development.
 
 ---
 
-## 🗄️ Database Concept
+## 🗄️ Database Schema
 
-The planned database can contain entities representing:
+The backend uses SQLAlchemy with SQLite by default. Setting `DATABASE_URL` to a PostgreSQL connection string switches the same schema to PostgreSQL. The implemented entities represent:
 
 ### Users
 
@@ -644,7 +666,12 @@ If multiple images from the same patient are available and patient grouping is k
 
 ## 📊 Evaluation
 
-Evaluation will be based on measurable metrics.
+Evaluation will be based on measurable metrics. The implemented harness is `backend/scripts/evaluate.py`; it reads synthetic samples from `backend/data/eval_samples.json` and is also exposed through `GET /api/evaluation`.
+
+```powershell
+cd backend
+py scripts/evaluate.py
+```
 
 | Component | Suggested Metrics |
 |-----------|-------------------|
@@ -678,6 +705,18 @@ The complete pipeline can be evaluated based on whether the expected medicine an
 ---
 
 ## 🧩 Testing
+
+Automated checks run locally and in GitHub Actions:
+
+```powershell
+cd backend
+py -m pytest
+py scripts/evaluate.py
+
+cd ../frontend
+npm run lint
+npm run build
+```
 
 Testing should cover both individual components and the complete system.
 

@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 
+import AuthPanel from "./components/AuthPanel";
 import Disclaimer from "./components/Disclaimer";
 import Header from "./components/Header";
+import HistoryPanel from "./components/HistoryPanel";
 import ResultsPanel from "./components/ResultsPanel";
 import UploadPanel from "./components/UploadPanel";
-import { scanPrescription, verifyPrescription } from "./services/api";
+import { getStoredUsername, scanPrescription, verifyPrescription } from "./services/api";
+
+const HISTORY_DISCLAIMER =
+  "Saved result from a previous scan. Verify all extracted information with a qualified professional.";
 
 function App() {
   const [file, setFile] = useState(null);
@@ -13,6 +18,8 @@ function App() {
   const [verification, setVerification] = useState(null);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
+  const [username, setUsername] = useState(getStoredUsername() || "");
+  const [historyRefresh, setHistoryRefresh] = useState(0);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
@@ -62,6 +69,9 @@ function App() {
     try {
       const data = await scanPrescription(file);
       setResult(data);
+      if (username) {
+        setHistoryRefresh((value) => value + 1);
+      }
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -105,6 +115,9 @@ function App() {
         })),
       });
       setVerification(data);
+      if (username) {
+        setHistoryRefresh((value) => value + 1);
+      }
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -112,11 +125,50 @@ function App() {
     }
   };
 
+  const handleOpenHistoryResult = (data) => {
+    setResult({
+      scan_id: data.scan_id,
+      filename: data.filename,
+      ocr_engine: data.ocr_engine,
+      raw_text: data.raw_text,
+      entities: {},
+      medicines: data.medicines.map((medicine) => ({
+        id: medicine.id,
+        text: medicine.name,
+        matched_name: medicine.name,
+        generic_name: null,
+        strength: medicine.strength,
+        form: null,
+        frequency: medicine.frequency,
+        match_score: medicine.confidence,
+        confidence: medicine.confidence,
+        alternatives: [],
+      })),
+      overall_confidence: data.overall_confidence,
+      warnings: data.warnings,
+      disclaimer: HISTORY_DISCLAIMER,
+    });
+    setVerification(null);
+    setError("");
+  };
+
   return (
     <div className="app-shell">
       <Header />
 
       <main>
+        <AuthPanel
+          username={username}
+          onAuthenticated={(nextUsername) => {
+            setUsername(nextUsername);
+            setHistoryRefresh((value) => value + 1);
+          }}
+          onSignOut={() => {
+            setUsername("");
+            setHistoryRefresh((value) => value + 1);
+          }}
+        />
+
         <section className="hero">
           <div className="hero__copy">
             <span className="eyebrow">ML · DL · CV · OCR · NLP</span>
@@ -158,6 +210,13 @@ function App() {
             onVerify={handleVerify}
           />
         </div>
+
+        <HistoryPanel
+          username={username}
+          refreshKey={historyRefresh}
+          onOpenResult={handleOpenHistoryResult}
+          onError={setError}
+        />
 
         <Disclaimer />
       </main>

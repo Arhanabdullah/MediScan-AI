@@ -13,6 +13,12 @@ class Settings:
     medicine_db_path: Path = Path(
         os.getenv("MEDICINE_DB_PATH", str(BASE_DIR / "data" / "medicines.json"))
     )
+    database_url: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'mediscan.db'}")
+    jwt_secret_key: str = os.getenv(
+        "JWT_SECRET_KEY", "dev-only-change-me-to-a-long-random-value-before-production"
+    )
+    jwt_expire_minutes: int = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
+    upload_dir: Path = Path(os.getenv("UPLOAD_DIR", str(BASE_DIR / "uploads")))
     demo_text: str = """Rx
 Patient: Demo Patient
 Date: 2026-01-15

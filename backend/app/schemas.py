@@ -68,3 +68,78 @@ class HealthResponse(BaseModel):
     service: str
     ocr_backend: str
     medicine_count: int
+
+
+class UserCreate(BaseModel):
+    username: str = Field(min_length=3, max_length=80)
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class UserOut(BaseModel):
+    id: int
+    username: str
+    email: str
+    created_at: datetime
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class HistoryMedicine(BaseModel):
+    id: str
+    name: str
+    strength: str | None = None
+    frequency: str | None = None
+    confidence: float = Field(ge=0, le=1)
+    confirmed: bool = False
+
+
+class HistoryItem(BaseModel):
+    scan_id: str
+    filename: str
+    created_at: datetime
+    overall_confidence: float = Field(ge=0, le=1)
+    medicine_count: int
+    verified: bool
+
+
+class ResultDetail(BaseModel):
+    scan_id: str
+    filename: str
+    raw_text: str
+    ocr_engine: str
+    overall_confidence: float = Field(ge=0, le=1)
+    warnings: list[str]
+    medicines: list[HistoryMedicine]
+    created_at: datetime
+    verified: bool
+
+
+class ModelInfoResponse(BaseModel):
+    name: str
+    version: str
+    approach: str
+    ocr_backend: str
+    extraction: str
+    matching: str
+    confidence: str
+    trained_model: bool
+    note: str
+
+
+class EvaluationResponse(BaseModel):
+    sample_count: int
+    cer: float
+    wer: float
+    medicine_precision: float
+    medicine_recall: float
+    medicine_f1: float
+    note: str
