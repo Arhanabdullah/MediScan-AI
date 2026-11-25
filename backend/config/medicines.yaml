@@ -1,0 +1,11 @@
+# Medicine repository configuration. JSON stays the default so existing
+# deployments keep working; SQLite is opt-in via env or this file.
+repository:
+  backend: json          # json | sqlite
+  sqlite_path: data/medicines.db
+  # Reload JSON records when the file's modification time changes.
+  hot_reload: true
+
+validation:
+  check_duplicates: true
+  require_generic_name: false

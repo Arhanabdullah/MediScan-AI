@@ -24,6 +24,16 @@ def test_health() -> None:
     assert response.json()["medicine_count"] > 0
 
 
+def test_correlation_id_is_echoed() -> None:
+    response = client.post(
+        "/api/scan",
+        headers={"X-Correlation-ID": "abc123"},
+        files={"file": ("prescription.png", _image_bytes(), "image/png")},
+    )
+    assert response.status_code == 200
+    assert response.headers["X-Correlation-ID"] == "abc123"
+
+
 def test_scan_and_verify() -> None:
     scan_response = client.post(
         "/api/scan",

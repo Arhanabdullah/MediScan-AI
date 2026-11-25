@@ -1,0 +1,53 @@
+# Confidence scoring parameters. Weights should sum to 1.0; the calculator
+# normalises them at load time so config edits cannot break the score bounds.
+weights:
+  ocr_engine: 0.45
+  text_length: 0.15
+  entity_coverage: 0.20
+  medicine_match: 0.20
+
+penalties:
+  per_warning: 0.05
+  empty_ocr: 0.5
+  no_medicines: 0.3
+
+ocr_scores:
+  tesseract: 0.95
+  tesseract-error: 0.25
+  tesseract-unavailable: 0.2
+  demo-fallback: 0.55
+  easyocr: 0.9
+  paddleocr: 0.92
+
+text_length_reference: 300
+min_score: 0.05
+max_score: 0.99
+
+# Model registry + deterministic A/B testing. Disabled by default so current
+# scores stay unchanged. Bucketing uses the request correlation ID, giving a
+# stable variant for the same scan.
+models:
+  default: weighted-v1
+  fallback: weighted-v1
+  ab:
+    enabled: false
+    # Weights are percentage points and must sum to 100.
+    variants:
+      - name: weighted-v1
+        weight: 50
+      - name: weighted-v2
+        weight: 50
+    # If a variant deviates from the default by more than this, use the
+    # default instead. This is a safety guard, not labelled regression testing.
+    max_delta: 0.15
+  variants:
+    weighted-v2:
+      weights:
+        ocr_engine: 0.40
+        text_length: 0.10
+        entity_coverage: 0.20
+        medicine_match: 0.30
+      penalties:
+        per_warning: 0.04
+      # Use the reserved empty_ocr/no_medicines penalties above.
+      use_reserved_penalties: true

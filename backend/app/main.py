@@ -1,10 +1,13 @@
-import os
+from __future__ import annotations
+
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.schemas import (
@@ -16,26 +19,22 @@ from app.schemas import (
     VerificationRequest,
     VerificationResponse,
 )
-from app.services.confidence import calculate_confidence
-from app.services.medicines import MEDICINES, match_medicine
+from app.services.confidence import calculate_breakdown, get_registry
+from app.services.logging import bind_correlation_id, get_logger, log_stage
+from app.services.medicines import get_repository, match_entities
 from app.services.nlp import extract_entities
-from app.services.ocr import extract_text
+from app.services.ocr import extract_text, preferred_preprocess_mode
 from app.services.preprocess import preprocess_image
+from app.services.telemetry import METRICS
+from app.services.protocols import ConfidenceContext
 
 app = FastAPI(title=settings.project_name, version="0.1.0")
 
-origins = [
-    origin.strip()
-    for origin in os.getenv(
-        "CORS_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000",
-    ).split(",")
-    if origin.strip()
-]
+pipeline_logger = get_logger("pipeline")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,7 +74,7 @@ async def health() -> HealthResponse:
         status="ok",
         service=settings.project_name,
         ocr_backend=settings.ocr_backend,
-        medicine_count=len(MEDICINES),
+        medicine_count=get_repository().count(),
     )
 
 
@@ -84,39 +83,75 @@ async def root_health() -> HealthResponse:
     return await health()
 
 
+@app.get("/api/metrics", include_in_schema=False)
+async def metrics(format: str = "prometheus") -> Response:
+    """In-process pipeline metrics. Labels contain no text, filenames or PHI."""
+    if format == "json":
+        return JSONResponse(METRICS.snapshot())
+    return Response(
+        METRICS.render_prometheus(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
+
+
+@app.get("/api/confidence/models", include_in_schema=False)
+async def confidence_models() -> dict:
+    """Registered confidence models and A/B status (no patient data)."""
+    registry = get_registry()
+    return {
+        "default": registry.default_name,
+        "fallback": registry.fallback_name,
+        "models": registry.names(),
+        "ab_enabled": bool(registry.ab.get("enabled")),
+    }
+
+
 @app.post("/api/scan", response_model=ScanResponse)
-async def scan(file: UploadFile = File(...)) -> ScanResponse:
+async def scan(request: Request, response: Response, file: UploadFile = File(...)) -> ScanResponse:
+    response.headers["X-Correlation-ID"] = bind_correlation_id(request.headers.get("X-Correlation-ID"))
+    started = time.perf_counter()
     data = await _read_upload(file)
 
+    mode = preferred_preprocess_mode(settings.ocr_backend)
     try:
-        processed, size, warnings = preprocess_image(data)
+        processed, size, warnings = preprocess_image(data, mode=mode)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
-    raw_text, ocr_engine, ocr_warnings = extract_text(processed)
+    ocr_result = extract_text(processed, settings.ocr_backend)
+    raw_text, ocr_engine, ocr_warnings = ocr_result
     warnings.extend(ocr_warnings)
     entities = extract_entities(raw_text)
-    strength_values = [entity["value"] for entity in entities["strengths"]]
     medicines: list[MedicineMatch] = []
 
-    for index, entity in enumerate(entities["medicine_names"]):
-        strength = None
-        if strength_values:
-            strength = strength_values[index] if index < len(strength_values) else strength_values[0]
-        match = match_medicine(entity["value"], strength)
-        match["confidence"] = round(
-            0.7 * match["confidence"] + 0.3 * entity["confidence"],
-            3,
-        )
-        medicines.append(MedicineMatch(**match))
+    with log_stage("medicine_matching", output_summary=f"{len(entities['medicine_names'])} candidates"):
+        for match in match_entities(entities):
+            medicines.append(MedicineMatch(**match))
 
-    overall_confidence = calculate_confidence(
-        raw_text,
-        entities,
-        [medicine.model_dump() for medicine in medicines],
-        ocr_engine,
-        warnings,
-    )
+    with log_stage("confidence"):
+        breakdown = calculate_breakdown(
+            ConfidenceContext(
+                raw_text=raw_text,
+                entities=entities,
+                medicines=[medicine.model_dump() for medicine in medicines],
+                ocr_engine=ocr_engine,
+                warnings=warnings,
+            )
+        )
+        overall_confidence = breakdown.overall
+        pipeline_logger.info(
+            "confidence_breakdown",
+            extra={
+                "output_summary": str(
+                    {
+                        "components": breakdown.components,
+                        "model": breakdown.metadata.get("model"),
+                        "strategy": breakdown.metadata.get("strategy"),
+                        "fallback_used": breakdown.metadata.get("fallback_used", False),
+                    }
+                )
+            },
+        )
 
     response = ScanResponse(
         scan_id=str(uuid.uuid4()),
@@ -131,6 +166,10 @@ async def scan(file: UploadFile = File(...)) -> ScanResponse:
         disclaimer=DISCLAIMER,
     )
     SCANS[response.scan_id] = response.model_dump()
+
+    METRICS.inc("scans_total", engine=ocr_engine, has_warnings=bool(warnings))
+    METRICS.observe("scan_duration_ms", (time.perf_counter() - started) * 1000, engine=ocr_engine)
+    METRICS.observe("scan_confidence", overall_confidence, engine=ocr_engine)
     return response
 
 

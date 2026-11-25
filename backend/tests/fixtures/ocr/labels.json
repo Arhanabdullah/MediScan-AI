@@ -1,0 +1,17 @@
+{
+  "note": "All text is synthetic. Ground truth is the exact text rendered into each image.",
+  "samples": [
+    {
+      "image": "demo_prescription.png",
+      "text": "Rx\nPatient: Demo Patient\nDate: 2026-01-15\n\n1. Amoxicillin 500 mg capsule\nTake 1 capsule three times daily for 7 days\n\n2. Paracetamol 650 mg tablet\nTake 1 tablet every 6 hours if needed\n\n3. Cetirizine 10 mg tablet\nTake 1 tablet once daily at bedtime"
+    },
+    {
+      "image": "typo_prescription.png",
+      "text": "Rx\n1. Paracetmol 500 mg tablet\nTake 1 tablet twice daily after food\n2. Azithromicin 500 mg tablet\nTake 1 tablet once daily for 3 days"
+    },
+    {
+      "image": "short_prescription.png",
+      "text": "Rx\nPatient: Test Only\n1. Amoxicilin 500 mg capsule\nTake 1 capsule three times daily for 5 days"
+    }
+  ]
+}

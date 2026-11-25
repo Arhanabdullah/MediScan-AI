@@ -1,0 +1,23 @@
+{
+  "note": "Synthetic OCR spellings and expected medicine IDs from app/data/medicines.json.",
+  "samples": [
+    {"text": "Paracetmol", "strength": "650 mg", "expected_id": "paracetamol-650"},
+    {"text": "Paracetamol", "strength": "650 mg", "expected_id": "paracetamol-650"},
+    {"text": "Calpol", "strength": "650 mg", "expected_id": "paracetamol-650"},
+    {"text": "Amoxil", "strength": "500 mg", "expected_id": "amoxicillin-500"},
+    {"text": "Amoxicilin", "strength": "500 mg", "expected_id": "amoxicillin-500"},
+    {"text": "Cetirizin", "strength": "10 mg", "expected_id": "cetirizine-10"},
+    {"text": "Zyrtec", "strength": "10 mg", "expected_id": "cetirizine-10"},
+    {"text": "Ibubrufen", "strength": "400 mg", "expected_id": "ibuprofen-400"},
+    {"text": "Brufen", "strength": "400 mg", "expected_id": "ibuprofen-400"},
+    {"text": "Azithromicin", "strength": "500 mg", "expected_id": "azithromycin-500"},
+    {"text": "Omeprazol", "strength": "20 mg", "expected_id": "omeprazole-20"},
+    {"text": "Pantoprazol", "strength": "40 mg", "expected_id": "pantoprazole-40"},
+    {"text": "Metformin", "strength": "500 mg", "expected_id": "metformin-500"},
+    {"text": "Atorvastatin", "strength": "10 mg", "expected_id": "atorvastatin-10"},
+    {"text": "Amlodipin", "strength": "5 mg", "expected_id": "amlodipine-5"},
+    {"text": "Salbutamol", "strength": "100 mcg", "expected_id": "salbutamol-100"},
+    {"text": "Ventolin", "strength": "100 mcg", "expected_id": "salbutamol-100"},
+    {"text": "Loratadin", "strength": "10 mg", "expected_id": "loratadine-10"}
+  ]
+}
