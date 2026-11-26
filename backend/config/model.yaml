@@ -1,0 +1,49 @@
+# Trained model configuration (Phase M1).
+#
+# Training scripts generate the datasets/artifacts described here. Everything is
+# disabled by default so the documented regex/fuzzy baseline stays active until
+# a model is trained, evaluated and explicitly enabled.
+model:
+  # Deterministic dataset generation so metrics are reproducible.
+  seed: 20261127
+
+  # Directories are relative to backend/. Generated data is safe synthetic text.
+  data_dir: data/model
+  artifact_dir: data/models
+
+  medicine_corrector:
+    enabled: false
+    artifact: data/models/medicine_corrector.joblib
+    metadata: data/models/medicine_corrector.json
+    # Minimum classifier probability before its suggestion is used.
+    min_score: 0.60
+    # How much the model suggestion influences the fuzzy score (0..1).
+    weight: 0.40
+    # Keep RapidFuzz/phonetic matching when the artifact is missing or unscored.
+    fallback_to_fuzzy: true
+    training:
+      variants_per_label: 24
+      validation_fraction: 0.15
+      test_fraction: 0.15
+
+  ner:
+    enabled: false
+    model_path: data/models/prescription_ner
+    metadata: data/models/prescription_ner.json
+    confidence: 0.85
+    # spaCy entity label -> entity key used by the NLP pipeline.
+    label_map:
+      MEDICINE: medicine_names
+      STRENGTH: strengths
+      FREQUENCY: frequencies
+      DURATION: durations
+      FORM: forms
+    # Using merge avoids the regex extractor shadowing the trained model;
+    # post-processing deduplicates overlapping values.
+    strategy: merge
+    training:
+      samples_per_template: 20
+      epochs: 12
+      dropout: 0.2
+      validation_fraction: 0.15
+      test_fraction: 0.15

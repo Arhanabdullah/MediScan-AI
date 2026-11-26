@@ -12,6 +12,7 @@ from .base import empty_result, has_entities, merge_results
 from .postprocess import postprocess
 from .regex_extractor import RegexExtractor
 from .spacy_extractor import SpacyExtractor
+from .trained_ner_extractor import TrainedNerExtractor
 from .transformer_extractor import TransformerExtractor
 
 logger = get_logger("nlp")
@@ -22,6 +23,7 @@ _FACTORIES: dict[str, ExtractorFactory] = {
     "regex": RegexExtractor,
     "spacy": SpacyExtractor,
     "transformer": TransformerExtractor,
+    "trained_ner": TrainedNerExtractor,
 }
 
 
@@ -74,17 +76,26 @@ class ExtractorPipeline:
 def build_pipeline(config: dict[str, Any] | None = None) -> ExtractorPipeline:
     """Build the pipeline described by config/nlp.yaml."""
     config = dict(config or settings.nlp)
+    names = [str(name).lower() for name in config.get("extractors", ["regex"])]
+    strategy = str(config.get("strategy", "fallback"))
+
+    ner_config = settings.model["ner"]
+    if ner_config.get("enabled", False) and "trained_ner" not in names:
+        names.append("trained_ner")
+        # merge prevents the regex stage from shadowing the trained extractor.
+        strategy = str(ner_config.get("strategy", "merge"))
+
     extractors: list[EntityExtractor] = []
-    for name in config.get("extractors", ["regex"]):
-        factory = _FACTORIES.get(str(name).lower())
+    for name in names:
+        factory = _FACTORIES.get(name)
         if factory is None:
-            logger.warning("unknown_extractor", extra={"output_summary": str(name)})
+            logger.warning("unknown_extractor", extra={"output_summary": name})
             continue
         extractors.append(factory())
 
     return ExtractorPipeline(
         extractors,
-        strategy=str(config.get("strategy", "fallback")),
+        strategy=strategy,
         postprocess_config=dict(config.get("postprocess") or {}),
     )
 

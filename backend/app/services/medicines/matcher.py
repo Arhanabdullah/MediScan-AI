@@ -8,6 +8,7 @@ from functools import lru_cache
 from typing import Any
 
 from app.config import settings
+from app.services.ml import get_medicine_corrector
 from app.services.protocols import EntityResult, MedicineMatchDict
 
 from .models import Medicine
@@ -24,6 +25,7 @@ except ImportError:
     _metaphone = None
 
 MATCHING: dict[str, Any] = settings.matching
+MODEL_CONFIG: dict[str, Any] = settings.model["medicine_corrector"]
 _CACHE_SIZE = int(MATCHING.get("score_cache_size", 8192))
 
 
@@ -103,16 +105,28 @@ def _index() -> list[tuple[Medicine, tuple[str, ...]]]:
     return _INDEX_CACHE[1]
 
 
-def _combined_score(candidate: str, names: tuple[str, ...]) -> float:
+def _combined_score(
+    candidate: str,
+    names: tuple[str, ...],
+    model_suggestion: tuple[str, float] | None = None,
+) -> float:
     best = max((_score(candidate, name) for name in names if name), default=0.0)
-    if not MATCHING.get("phonetic_enabled", True) or best >= 1.0:
-        return best
-    candidate_key = phonetic_key(candidate)
-    if not candidate_key:
-        return best
-    phonetic_match = 1.0 if any(phonetic_key(name) == candidate_key for name in names if name) else 0.0
-    weight = min(1.0, max(0.0, float(MATCHING.get("phonetic_weight", 0.2))))
-    return (1.0 - weight) * best + weight * phonetic_match
+    if best < 1.0:
+        if MATCHING.get("phonetic_enabled", True):
+            candidate_key = phonetic_key(candidate)
+            if candidate_key:
+                phonetic_match = 1.0 if any(
+                    phonetic_key(name) == candidate_key for name in names if name
+                ) else 0.0
+                weight = min(1.0, max(0.0, float(MATCHING.get("phonetic_weight", 0.2))))
+                best = (1.0 - weight) * best + weight * phonetic_match
+
+        # Optional trained corrector: only boosts catalogue entries it was
+        # trained to recognise, and never replaces the fuzzy result outright.
+        if model_suggestion and normalize(model_suggestion[0]) in names:
+            model_weight = min(1.0, max(0.0, float(MODEL_CONFIG.get("weight", 0.4))))
+            best = (1.0 - model_weight) * best + model_weight * model_suggestion[1]
+    return best
 
 
 def _bonus(medicine: Medicine, strength: str | None, form: str | None) -> float:
@@ -138,8 +152,17 @@ def match_medicine(
     if not candidate:
         return None
 
+    model_suggestion: tuple[str, float] | None = None
+    if MODEL_CONFIG.get("enabled", False):
+        prediction = get_medicine_corrector().predict(text)
+        if prediction is not None:
+            model_suggestion = (prediction[0], prediction[1])
+
     scored = sorted(
-        ((_combined_score(candidate, names), medicine) for medicine, names in _index()),
+        (
+            (_combined_score(candidate, names, model_suggestion), medicine)
+            for medicine, names in _index()
+        ),
         key=lambda item: item[0],
         reverse=True,
     )

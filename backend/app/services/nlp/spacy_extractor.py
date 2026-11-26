@@ -20,7 +20,9 @@ class SpacyExtractor(EntityExtractorBase):
 
     def __init__(self, config: Mapping[str, Any] | None = None) -> None:
         config = dict(config or settings.nlp.get("spacy") or {})
-        self.model_name = str(config.get("model") or "en_core_web_sm")
+        # An explicitly empty model name disables the extractor; only a missing
+        # key falls back to the conventional English model.
+        self.model_name = str(config.get("model", "en_core_web_sm"))
         self.label_map = label_map_from_config(config.get("label_map"))
         self.confidence = float(config.get("confidence", 0.8))
 

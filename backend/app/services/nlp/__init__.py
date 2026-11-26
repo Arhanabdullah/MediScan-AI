@@ -22,6 +22,7 @@ from .postprocess import (
 )
 from .regex_extractor import RegexExtractor
 from .spacy_extractor import SpacyExtractor
+from .trained_ner_extractor import TrainedNerExtractor
 from .transformer_extractor import TransformerExtractor
 
 _pipeline: ExtractorPipeline | None = None
@@ -67,6 +68,7 @@ __all__ = [
     "RegexExtractor",
     "SpacyExtractor",
     "TransformerExtractor",
+    "TrainedNerExtractor",
     "add_entity",
     "build_pipeline",
     "deduplicate",

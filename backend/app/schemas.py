@@ -133,6 +133,7 @@ class ModelInfoResponse(BaseModel):
     confidence: str
     trained_model: bool
     note: str
+    trained_models: dict[str, Any] = Field(default_factory=dict)
 
 
 class EvaluationResponse(BaseModel):

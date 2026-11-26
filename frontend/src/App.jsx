@@ -4,6 +4,7 @@ import AuthPanel from "./components/AuthPanel";
 import Disclaimer from "./components/Disclaimer";
 import Header from "./components/Header";
 import HistoryPanel from "./components/HistoryPanel";
+import ModelPanel from "./components/ModelPanel";
 import ResultsPanel from "./components/ResultsPanel";
 import UploadPanel from "./components/UploadPanel";
 import { getStoredUsername, scanPrescription, verifyPrescription } from "./services/api";
@@ -217,6 +218,8 @@ function App() {
           onOpenResult={handleOpenHistoryResult}
           onError={setError}
         />
+
+        <ModelPanel />
 
         <Disclaimer />
       </main>

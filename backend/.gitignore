@@ -9,3 +9,5 @@ data/*.db
 *.db
 *.sqlite3
 uploads/
+data/model/
+data/models/

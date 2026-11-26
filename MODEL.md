@@ -2,7 +2,7 @@
 
 ## Current system
 
-MediScan-AI uses a deterministic, configurable baseline instead of a trained machine-learning model. This is intentional: the project brief calls for a reliable, measurable pipeline before ML/DL experiments.
+MediScan-AI uses a deterministic, configurable baseline pipeline. Two small models can be trained on **synthetic** data (Phase M1) but are disabled by default, so the baseline remains active until they are explicitly enabled in `backend/config/model.yaml`. This keeps the project reliable and measurable before any clinical claims.
 
 ```text
 Prescription image
@@ -118,16 +118,48 @@ Result from the five synthetic samples in `backend/data/eval_samples.json`:
 
 These values describe spelling-corrupted synthetic text, not real prescriptions or clinical performance.
 
+## Trained models (Phase M1)
+
+Two optional models are implemented with reproducible synthetic datasets, fixed
+train/validation/test splits, versioned artifacts and measured metrics. See
+`plan/ml-model-status.md` for the full protocol and measured results.
+
+- `medicine-corrector`: char n-gram TF-IDF + logistic regression, trained on 288 synthetic
+  catalogue spelling variants (202/43/43 split). Test accuracy/F1 = 1.0000 on synthetic data.
+- `prescription-ner`: spaCy blank-English NER, trained on 1200 synthetic template lines
+  (840/180/180 split). Test exact-span F1 = 1.0000 on synthetic data.
+
+Both are disabled by default (`backend/config/model.yaml`). The corrector only boosts
+catalogue-backed fuzzy scores; the NER extractor is merged into the NLP pipeline when
+enabled. Missing artifacts or optional packages cause a safe fallback to the baseline.
+Artifacts and generated datasets are gitignored; regenerate with:
+
+```powershell
+cd backend
+python scripts/generate_model_data.py
+python scripts/train_medicine_corrector.py
+python scripts/train_ner.py
+```
+
+`GET /api/model-info` reports their versions, status and held-out metrics. The frontend
+shows this in a model-status panel. The perfect scores reflect a closed synthetic
+vocabulary, **not clinical performance**.
+
+To measure these pipelines on your own labelled data, see `plan/custom-data-testing.md`
+(OCR images, text/medicines, typo labels and NER spans). Keep real prescriptions outside
+the repository.
+
 ## ML/DL roadmap
 
 Service optimization Phases 1–5 are implemented: protocols, structured logging, multi-backend OCR, repository-backed medicine matching, pluggable NLP, confidence model registry and telemetry. See `plan/services-optimization.md` and the phase status reports.
 
-Planned modeling experiments, in order:
+Experiments, in order:
 
 1. Compare Tesseract, EasyOCR and PaddleOCR on the same printed-prescription samples with `benchmark_ocr.py`.
 2. Measure preprocessing impact with before/after CER and WER.
-3. Compare fuzzy matching with a classifier trained on OCR spelling variants.
-4. Evaluate a small NER model for medicine/strength/frequency extraction.
+3. ~~Compare fuzzy matching with a classifier trained on OCR spelling variants.~~ Done in Phase M1 (synthetic only).
+4. ~~Evaluate a small NER model for medicine/strength/frequency extraction.~~ Done in Phase M1 (synthetic only).
 5. Only then explore CNN/Transformer experiments if a suitable labeled dataset exists.
 
-Do not add a model file or accuracy claim until an experiment produces measured results.
+Model artifacts remain gitignored and are only enabled after measured results exist. No
+accuracy claim may be made outside the defined synthetic splits.

@@ -36,6 +36,7 @@ from app.services.confidence import calculate_breakdown, get_registry
 from app.services.evaluation import evaluate_samples
 from app.services.logging import bind_correlation_id, get_logger, log_stage
 from app.services.medicines import get_repository, match_entities
+from app.services.ml import get_trained_model_info
 from app.services.nlp import extract_entities
 from app.services.ocr import extract_text, preferred_preprocess_mode
 from app.services.preprocess import preprocess_image
@@ -196,18 +197,31 @@ async def me(current_user: User = Depends(get_current_user)) -> UserOut:
     return current_user
 
 
+def _model_status_note(status: dict) -> str:
+    if status["trained_model"]:
+        return "Synthetic trained models are active. See MODEL.md for limitations."
+    if status.get("artifacts_present"):
+        return (
+            "Trained models exist but are disabled by default; enable them in "
+            "config/model.yaml. See MODEL.md for limitations."
+        )
+    return "No trained ML/DL model is active. See MODEL.md for the experiment roadmap."
+
+
 @app.get("/api/model-info", response_model=ModelInfoResponse)
 async def model_info() -> ModelInfoResponse:
+    model_status = get_trained_model_info()
     return ModelInfoResponse(
         name="MediScan-AI Baseline",
-        version="0.2.0",
-        approach="modular rule-based pipeline with configurable extractors and fuzzy matching",
+        version="0.3.0",
+        approach="modular pipeline with optional synthetic trained models",
         ocr_backend=settings.ocr_backend,
-        extraction="pluggable regex/spaCy/transformer entity extraction",
-        matching="repository-backed RapidFuzz with phonetic and strength/form scoring",
+        extraction="pluggable regex/spaCy/transformer/trained-NER entity extraction",
+        matching="repository-backed RapidFuzz with phonetic, strength/form and optional trained-corrector scoring",
         confidence="versioned weighted model registry with an explainable breakdown",
-        trained_model=False,
-        note="No trained ML/DL model is active. See MODEL.md for the experiment roadmap.",
+        trained_model=model_status["trained_model"],
+        note=_model_status_note(model_status),
+        trained_models=model_status["models"],
     )
 
 

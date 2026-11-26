@@ -13,6 +13,7 @@ from config.loader import (
     load_confidence_config,
     load_matching_config,
     load_medicines_config,
+    load_model_config,
     load_nlp_config,
     load_ocr_config,
     load_patterns,
@@ -101,6 +102,7 @@ class Settings:
         }
 
         self.matching: dict[str, Any] = load_matching_config()
+        self.model: dict[str, Any] = load_model_config()
 
         medicine_config = load_medicines_config()
         self.medicines_repository: dict[str, Any] = {

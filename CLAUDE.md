@@ -38,6 +38,11 @@ python scripts/benchmark_ocr.py        # CER/WER per available OCR engine
 python scripts/tune_pipeline.py        # fuzzy-match sweep + confidence MAE
 python scripts/evaluate.py             # CER/WER + medicine P/R/F1 on synthetic text
 
+# Phase M1 trained models (synthetic data only; artifacts are gitignored)
+python scripts/generate_model_data.py      # deterministic train/validation/test splits
+python scripts/train_medicine_corrector.py # char n-gram classifier -> data/models/
+python scripts/train_ner.py                # spaCy NER -> data/models/
+
 # Medicine catalogue admin CLI (JSON source stays authoritative)
 python -m scripts.manage_medicines validate
 python -m scripts.manage_medicines stats
@@ -116,10 +121,15 @@ app/
       weighted.py          # Fixed dynamic/default weighted models
       registry.py          # Model registry, deterministic A/B, safety fallback
       __init__.py          # calculate_breakdown / calculate_confidence facades
+    ml/            # Optional trained-model inference (lazy loading + status)
+      medicine_corrector.py  # sklearn pipeline wrapper with confidence threshold
+      status.py              # public model-info view of both models
     security.py    # bcrypt password hashing + JWT encode/decode
     evaluation.py  # CER/WER + medicine precision/recall/F1
   data/medicines.json
   data/eval_samples.json  # synthetic text samples for scripts/evaluate.py
+  data/model/             # generated synthetic training splits (gitignored)
+  data/models/            # trained artifacts + metrics cards (gitignored)
 config/
   patterns.yaml   # Regexes, labels, skip prefixes, entity confidence hints
   nlp.yaml        # Extractor order/strategy, custom entity keys, post-processing
@@ -127,6 +137,7 @@ config/
   confidence.yaml # Weights, penalties, per-engine OCR scores, model registry/A-B
   matching.yaml   # Fuzzy-match thresholds, phonetic and bonus weights
   medicines.yaml  # Repository backend, SQLite path, validation flags
+  model.yaml      # Phase M1 flags, artifact paths, splits, thresholds
   loader.py       # Cached, validated YAML loading
 scripts/
   make_fixtures.py     # Synthetic prescription images (no PHI)
@@ -135,12 +146,16 @@ scripts/
   manage_medicines.py  # validate / stats / migrate / import / export CLI
   scan_image.py        # scan one local image via TestClient, no server needed
   evaluate.py          # CER/WER + medicine P/R/F1 on synthetic text samples
+  generate_model_data.py      # deterministic synthetic train/val/test splits
+  train_medicine_corrector.py # char n-gram classifier training + metrics card
+  train_ner.py                # spaCy NER training + metrics card
 tests/
   test_api.py        # API integration tests (TestClient, demo OCR)
   test_services.py   # Unit tests for protocols, registry, config, metrics
   test_medicines.py  # Repository, validation, loader, matcher and CLI tests
   test_nlp.py        # Extractor pipeline, strategies and post-processing tests
   test_confidence_models.py # Model registry, A/B safety, telemetry + metrics endpoint tests
+  test_models.py     # Phase M1 datasets, corrector, NER wiring and model-info tests
   fixtures/          # Synthetic demo text, OCR images, matching/confidence labels
 ```
 
@@ -156,6 +171,7 @@ components/
   Disclaimer.jsx     # Medical disclaimer
   AuthPanel.jsx      # Register/login/sign-out
   HistoryPanel.jsx   # Private saved scans: open/delete
+  ModelPanel.jsx     # Trained-model status and held-out metrics from /api/model-info
 services/
   api.js        # fetch wrappers with JWT handling for scan/verify/auth/history
 styles.css      # Global styles
@@ -231,6 +247,15 @@ Weights can be overridden at runtime with the `CONFIDENCE_WEIGHTS` JSON env var
 - `app/services/telemetry.py` records stage durations/errors (`log_stage`), scan counts, OCR engine labels, confidence histograms and model selections. Labels never contain raw text, filenames or patient data.
 - `GET /api/metrics` returns Prometheus text; `GET /api/metrics?format=json` returns a snapshot. `GET /api/confidence/models` lists registered models and A/B status. Metrics are in-process and lost on restart.
 
+### Phase M1 Trained Models
+- `config/model.yaml` is the single source of truth for flags, paths, thresholds and training parameters. Both `medicine_corrector.enabled` and `ner.enabled` are **false** by default so the baseline pipeline and API contract are unchanged.
+- `scripts/generate_model_data.py` deterministically builds 288 typo samples and 1200 NER lines with 70/15/15 train/validation/test splits from the medicine catalogue. Generated data and artifacts (`backend/data/model/`, `backend/data/models/`) are gitignored.
+- `scripts/train_medicine_corrector.py` trains char n-gram TF-IDF + logistic regression and writes `medicine_corrector.joblib` plus a metrics card. `scripts/train_ner.py` trains a spaCy blank-English NER and writes `prescription_ner/` plus a metrics card. Test metrics were measured on synthetic held-out splits only (see `plan/ml-model-status.md`); they are not clinical claims.
+- `app/services/ml/medicine_corrector.py` lazily loads the artifact only when enabled; a low-probability prediction or any load error falls back to fuzzy matching. The matcher blends a model suggestion only when the suggested name exists in the active repository, never replacing the fuzzy result.
+- `app/services/nlp/trained_ner_extractor.py` is appended when `ner.enabled=true`; the strategy becomes `merge` so regex cannot shadow it. Missing spaCy/model files are logged and skipped.
+- `GET /api/model-info` includes `trained_models` with version, enabled/available flags, method, metrics and synthetic-data notes. The React `ModelPanel` displays this status; the disclaimer remains visible.
+- `scripts/evaluate.py` accepts `--data` for custom OCR-text samples and `--output` for a report; the bundled synthetic default is unchanged. Full custom-data workflows are documented in `plan/custom-data-testing.md` (keep real prescriptions outside the repo).
+
 ### Storage
 - Anonymous scans use the in-memory `SCANS` / `VERIFICATIONS` dicts and disappear on restart.
 - Authenticated scans are persisted in SQLAlchemy tables (`users`, `prescriptions`, `detected_medicines`) with private per-user image files under `UPLOAD_DIR`; no public image URLs exist.
@@ -244,7 +269,7 @@ Configured for `http://localhost:5173`, `http://127.0.0.1:5173`, `http://localho
 ## Development Notes
 
 ### Current Stage
-Based on the 10-week plan in README, Levels 1–3 and 5–10 are implemented, plus a Level 4 evaluation harness. No trained ML/DL model is active; see `MODEL.md` for the baseline method, measured synthetic results and experiment roadmap. Plan Phases 1–5 (foundation/abstraction, multi-backend OCR, medicine DB/matching, pluggable NLP, confidence models + telemetry) remain implemented; see `plan/phase1-2-status.md`, `plan/phase3-status.md`, `plan/phase4-status.md` and `plan/phase5-status.md` for scope, necessity checks and measured optimization results.
+Based on the 10-week plan in README, Levels 1–3 and 5–10 are implemented, plus a Level 4 evaluation harness. Plan Phases 1–5 (foundation/abstraction, multi-backend OCR, medicine DB/matching, pluggable NLP, confidence models + telemetry) remain implemented; see `plan/phase1-2-status.md`, `plan/phase3-status.md`, `plan/phase4-status.md` and `plan/phase5-status.md` for scope, necessity checks and measured optimization results. Phase M1 adds two optional trained models (synthetic medicine typo classifier + spaCy prescription NER) with fixed splits, artifacts and measured metrics; they are disabled by default in `backend/config/model.yaml`. See `plan/ml-model-status.md` and `MODEL.md`.
 
 ### Agent progress checklist
 
@@ -254,8 +279,9 @@ Based on the 10-week plan in README, Levels 1–3 and 5–10 are implemented, pl
 - [x] Auth and private history wired into React.
 - [x] Docker Compose, Dockerfiles, nginx proxy and GitHub Actions CI.
 - [x] Expanded tests for auth, history, model info, evaluation metrics, and remote service architecture.
+- [x] Phase M1 synthetic trained models (medicine typo classifier + spaCy NER), data splits, artifacts, optional runtime flags and frontend model-status panel.
 
-Still out of scope: a trained ML/DL model, a real labeled prescription dataset, handwritten prescription recognition, and clinical accuracy claims beyond synthetic evaluation.
+Still out of scope: a trained image-level OCR/DL model, a real labeled prescription dataset, handwritten prescription recognition, and clinical accuracy claims beyond synthetic evaluation.
 
 ### Adding New Medicines
 Edit `backend/app/data/medicines.json` (the authoritative source) with entries following the schema:

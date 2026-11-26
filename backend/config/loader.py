@@ -58,6 +58,18 @@ def load_nlp_config() -> dict[str, Any]:
 
 
 @lru_cache(maxsize=1)
+def load_model_config() -> dict[str, Any]:
+    """Trained model paths, flags and training parameters."""
+    data = load_yaml("model.yaml").get("model")
+    if not isinstance(data, dict):
+        raise ValueError("model.yaml must define a 'model' mapping.")
+    for key in ("medicine_corrector", "ner"):
+        if not isinstance(data.get(key), dict):
+            raise ValueError(f"model.yaml must define a '{key}' mapping.")
+    return data
+
+
+@lru_cache(maxsize=1)
 def load_ocr_config() -> dict[str, Any]:
     """OCR engine registry configuration."""
     data = load_yaml("ocr.yaml")
